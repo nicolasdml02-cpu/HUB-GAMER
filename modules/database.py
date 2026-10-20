@@ -4,6 +4,10 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "data", "gamer_hub.db")
 
+def get_db_path():
+    """Retorna o caminho absoluto do arquivo de banco de dados."""
+    return DB_PATH
+
 def get_connection():
     """Retorna a conexão com o banco de dados SQLite."""
     conn = sqlite3.connect(DB_PATH)
@@ -37,20 +41,30 @@ def init_db():
             )
         """)
         
-        # Tabela de Checklist de Progresso
+        # Tabela de Checklist de Progresso com contadores (atual e total)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS checklist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 jogo_id INTEGER NOT NULL,
                 item_nome TEXT NOT NULL,
+                atual INTEGER DEFAULT 0,
+                total INTEGER DEFAULT 1,
                 concluido INTEGER DEFAULT 0,
                 FOREIGN KEY (jogo_id) REFERENCES jogos (id) ON DELETE CASCADE
             )
         """)
+
+        # Migração segura caso a tabela antiga exista sem as colunas atual/total
+        cursor.execute("PRAGMA table_info(checklist)")
+        colunas_checklist = [col[1] for col in cursor.fetchall()]
+        if colunas_checklist:
+            if 'atual' not in colunas_checklist:
+                cursor.execute("ALTER TABLE checklist ADD COLUMN atual INTEGER DEFAULT 0")
+            if 'total' not in colunas_checklist:
+                cursor.execute("ALTER TABLE checklist ADD COLUMN total INTEGER DEFAULT 1")
         
         conn.commit()
     
-    # Insere os links pré-cadastrados
     _popular_jogos_iniciais()
 
 def _popular_jogos_iniciais():
@@ -79,4 +93,14 @@ def _popular_jogos_iniciais():
                 INSERT OR IGNORE INTO jogos (nome, categoria, url_mapa)
                 VALUES (?, ?, ?)
             """, (nome, categoria, url))
+        conn.commit()
+
+def inserir_novo_jogo(nome, url_mapa, categoria="Geral"):
+    """Insere um novo jogo diretamente no banco de dados local."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO jogos (nome, categoria, url_mapa)
+            VALUES (?, ?, ?)
+        """, (nome, categoria, url_mapa))
         conn.commit()
