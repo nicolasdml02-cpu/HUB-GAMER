@@ -1,5 +1,7 @@
 import sys
+import os
 from PyQt6.QtCore import QUrl, Qt
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
     QLineEdit, QTextEdit, QLabel, QPushButton, QListWidgetItem,
@@ -142,6 +144,16 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Hub Gamer - Central de Guias & Mapas")
         self.setGeometry(100, 100, 1400, 800)
         self.setStyleSheet(GAMER_STYLE)
+
+        # Configurar ícone da janela (Busca na pasta assets/)
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        caminho_icone = os.path.join(base_dir, "assets", "logo.ico")
+        if not os.path.exists(caminho_icone):
+            # Fallback para PNG/JPG se não houver ICO no ambiente de desenvolvimento
+            caminho_icone = os.path.join(base_dir, "assets", "logo.png")
+            
+        if os.path.exists(caminho_icone):
+            self.setWindowIcon(QIcon(caminho_icone))
 
         init_db()
         self.todos_jogos = listar_jogos()
