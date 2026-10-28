@@ -13,7 +13,7 @@ from modules.database import init_db
 from modules.services import (
     listar_jogos, cadastrar_jogo, exportar_backup_db, importar_backup_db,
     obter_anotacao, salvar_anotacao, listar_checklist, adicionar_item_checklist,
-    atualizar_contador_checklist, remover_item_checklist
+    atualizar_contador_checklist, remover_item_checklist, editar_jogo, excluir_jogo
 )
 
 # QSS: Estilo Gamer Dark / Neon
@@ -124,17 +124,31 @@ QPushButton:pressed {
     background-color: #5300bd;
 }
 
-QPushButton#btn-backup {
+QPushButton#btn-acao {
     background-color: #1c1f2b;
     border: 1px solid #323748;
     color: #a0a7b5;
     font-size: 12px;
 }
 
-QPushButton#btn-backup:hover {
+QPushButton#btn-acao:hover {
     background-color: #262b3c;
     color: #00f0ff;
     border-color: #00f0ff;
+}
+
+QPushButton#btn-toggle {
+    background-color: #1a1c23;
+    color: #00f0ff;
+    border: 1px solid #2d313e;
+    font-size: 10px;
+    font-weight: bold;
+    border-radius: 4px;
+}
+
+QPushButton#btn-toggle:hover {
+    background-color: #7000ff;
+    color: #ffffff;
 }
 """
 
@@ -145,11 +159,9 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 1400, 800)
         self.setStyleSheet(GAMER_STYLE)
 
-        # Configurar ícone da janela (Busca na pasta assets/)
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         caminho_icone = os.path.join(base_dir, "assets", "logo.ico")
         if not os.path.exists(caminho_icone):
-            # Fallback para PNG/JPG se não houver ICO no ambiente de desenvolvimento
             caminho_icone = os.path.join(base_dir, "assets", "logo.png")
             
         if os.path.exists(caminho_icone):
@@ -162,13 +174,17 @@ class MainWindow(QMainWindow):
         self._init_ui()
 
     def _init_ui(self):
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_layout = QHBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # -----------------------------------------------------------------
         # PAINEL ESQUERDO: LISTA DE JOGOS, BUSCA E GERENCIAMENTO
         # -----------------------------------------------------------------
-        panel_left = QWidget()
-        layout_left = QVBoxLayout(panel_left)
+        self.panel_left = QWidget()
+        layout_left = QVBoxLayout(self.panel_left)
 
         lbl_jogos = QLabel("🎮 MEUS JOGOS")
         lbl_jogos.setStyleSheet("font-size: 15px; letter-spacing: 1px; color: #00f0ff;")
@@ -187,14 +203,27 @@ class MainWindow(QMainWindow):
         btn_add_jogo.clicked.connect(self._abrir_modal_adicionar_jogo)
         layout_left.addWidget(btn_add_jogo)
 
+        # Botões de Editar e Excluir Jogo Selecionado
+        layout_acoes_jogo = QHBoxLayout()
+        btn_editar_jogo = QPushButton("✏️ Editar")
+        btn_editar_jogo.setObjectName("btn-acao")
+        btn_editar_jogo.clicked.connect(self._abrir_modal_editar_jogo)
+
+        btn_excluir_jogo = QPushButton("🗑️ Excluir")
+        btn_excluir_jogo.setObjectName("btn-acao")
+        btn_excluir_jogo.clicked.connect(self._excluir_jogo_atual)
+
+        layout_acoes_jogo.addWidget(btn_editar_jogo)
+        layout_acoes_jogo.addWidget(btn_excluir_jogo)
+        layout_left.addLayout(layout_acoes_jogo)
+
         layout_backup = QHBoxLayout()
-        
-        btn_exportar = QPushButton("💾 Exportar Backup")
-        btn_exportar.setObjectName("btn-backup")
+        btn_exportar = QPushButton("💾 Exportar")
+        btn_exportar.setObjectName("btn-acao")
         btn_exportar.clicked.connect(self._exportar_backup)
 
-        btn_importar = QPushButton("📂 Importar Backup")
-        btn_importar.setObjectName("btn-backup")
+        btn_importar = QPushButton("📂 Importar")
+        btn_importar.setObjectName("btn-acao")
         btn_importar.clicked.connect(self._importar_backup)
 
         layout_backup.addWidget(btn_exportar)
@@ -210,8 +239,8 @@ class MainWindow(QMainWindow):
         # -----------------------------------------------------------------
         # PAINEL DIREITO: ABAS DE ANOTAÇÕES & CHECKLIST
         # -----------------------------------------------------------------
-        panel_right = QWidget()
-        layout_right = QVBoxLayout(panel_right)
+        self.panel_right = QWidget()
+        layout_right = QVBoxLayout(self.panel_right)
 
         self.tabs_right = QTabWidget()
 
@@ -252,21 +281,50 @@ class MainWindow(QMainWindow):
         layout_checklist.addWidget(self.list_checklist)
 
         self.tabs_right.addTab(tab_checklist, "✅ Checklist")
-
         layout_right.addWidget(self.tabs_right)
 
-        splitter.addWidget(panel_left)
-        splitter.addWidget(self.browser)
-        splitter.addWidget(panel_right)
+        # Adicionar os painéis ao Splitter principal
+        self.splitter.addWidget(self.panel_left)
+        self.splitter.addWidget(self.browser)
+        self.splitter.addWidget(self.panel_right)
+        self.splitter.setSizes([240, 860, 300])
 
-        splitter.setSizes([240, 860, 300])
-        self.setCentralWidget(splitter)
+        # Botões colados nas abas para esconder/mostrar painéis lateralmente
+        self.btn_toggle_left = QPushButton("◀")
+        self.btn_toggle_left.setObjectName("btn-toggle")
+        self.btn_toggle_left.setFixedWidth(20)
+        self.btn_toggle_left.setToolTip("Esconder/Mostrar Painel Esquerdo")
+        self.btn_toggle_left.clicked.connect(self._alternar_painel_esquerdo)
+
+        self.btn_toggle_right = QPushButton("▶")
+        self.btn_toggle_right.setObjectName("btn-toggle")
+        self.btn_toggle_right.setFixedWidth(20)
+        self.btn_toggle_right.setToolTip("Esconder/Mostrar Painel Direito")
+        self.btn_toggle_right.clicked.connect(self._alternar_painel_direito)
+
+        # Montagem do layout central da janela
+        main_layout.addWidget(self.btn_toggle_left)
+        main_layout.addWidget(self.splitter)
+        main_layout.addWidget(self.btn_toggle_right)
+
+        container_central = QWidget()
+        container_central.setLayout(main_layout)
+        self.setCentralWidget(container_central)
 
         self._carregar_lista_jogos(self.todos_jogos)
-
         if self.todos_jogos:
             self.list_jogos.setCurrentRow(0)
             self._ao_selecionar_jogo(self.list_jogos.item(0))
+
+    def _alternar_painel_esquerdo(self):
+        visivel = self.panel_left.isVisible()
+        self.panel_left.setVisible(not visivel)
+        self.btn_toggle_left.setText("▶" if visivel else "◀")
+
+    def _alternar_painel_direito(self):
+        visivel = self.panel_right.isVisible()
+        self.panel_right.setVisible(not visivel)
+        self.btn_toggle_right.setText("◀" if visivel else "▶")
 
     def _carregar_lista_jogos(self, lista):
         self.list_jogos.clear()
@@ -296,6 +354,68 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Sucesso", f"O jogo '{nome_jogo}' foi cadastrado com sucesso!")
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Não foi possível cadastrar o jogo.\nDetalhes: {e}")
+
+    def _abrir_modal_editar_jogo(self):
+        if not self.jogo_atual:
+            QMessageBox.warning(self, "Aviso", "Selecione um jogo para editar.")
+            return
+
+        novo_nome, ok1 = QInputDialog.getText(self, "Editar Jogo", "Novo nome do jogo:", text=self.jogo_atual["nome"])
+        if not ok1 or not novo_nome.strip():
+            return
+
+        nova_url, ok2 = QInputDialog.getText(self, "Editar Jogo", "Nova URL do mapa ou guia:", text=self.jogo_atual["url_mapa"])
+        if not ok2 or not nova_url.strip():
+            return
+
+        try:
+            editar_jogo(self.jogo_atual["id"], novo_nome.strip(), nova_url.strip(), self.jogo_atual.get("categoria", "Geral"))
+            self.todos_jogos = listar_jogos()
+            self._filtrar_jogos(self.input_busca.text())
+            
+            # Atualiza o jogo selecionado atualmente
+            for jogo in self.todos_jogos:
+                if jogo["id"] == self.jogo_atual["id"]:
+                    self.jogo_atual = jogo
+                    break
+            
+            self.browser.setUrl(QUrl(self.jogo_atual["url_mapa"]))
+            self.lbl_jogo_anotacao.setText(f"📌 {self.jogo_atual['nome']}")
+            QMessageBox.information(self, "Sucesso", "Jogo atualizado com sucesso!")
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Falha ao atualizar o jogo: {e}")
+
+    def _excluir_jogo_atual(self):
+        if not self.jogo_atual:
+            QMessageBox.warning(self, "Aviso", "Selecione um jogo para excluir.")
+            return
+
+        resposta = QMessageBox.question(
+            self, "Confirmar Exclusão",
+            f"Tem certeza que deseja excluir o jogo '{self.jogo_atual['nome']}'?\nTodas as anotações e checklists associadas serão apagadas.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if resposta == QMessageBox.StandardButton.Yes:
+            try:
+                excluir_jogo(self.jogo_atual["id"])
+                self.todos_jogos = listar_jogos()
+                self._filtrar_jogos(self.input_busca.text())
+                
+                if self.todos_jogos:
+                    self.list_jogos.setCurrentRow(0)
+                    self._ao_selecionar_jogo(self.list_jogos.item(0))
+                else:
+                    self.jogo_atual = None
+                    self.browser.setUrl(QUrl("about:blank"))
+                    self.lbl_jogo_anotacao.setText("Selecione um jogo")
+                    self.txt_anotacao.clear()
+                    self.list_checklist.clear()
+
+                QMessageBox.information(self, "Sucesso", "Jogo excluído com sucesso!")
+            except Exception as e:
+                QMessageBox.critical(self, "Erro", f"Falha ao excluir o jogo: {e}")
 
     def _exportar_backup(self):
         self._salvar_anotacao_atual()
@@ -353,24 +473,20 @@ class MainWindow(QMainWindow):
             layout_item = QHBoxLayout(item_widget)
             layout_item.setContentsMargins(2, 2, 2, 2)
 
-            # Nome e Contador (ex: Tesouros (3/15))
             status_cor = "#00f0ff" if it["concluido"] else "#d0d7de"
             lbl_texto = QLabel(f"{it['item_nome']}  ({it['atual']}/{it['total']})")
             lbl_texto.setStyleSheet(f"color: {status_cor}; font-size: 13px;")
 
-            # Botão de Decrementar (-)
             btn_menos = QPushButton("➖")
             btn_menos.setFixedSize(30, 26)
             btn_menos.setStyleSheet("background-color: #232631; color: #fff; font-size: 11px;")
             btn_menos.clicked.connect(lambda checked=False, i_id=it["id"]: self._alterar_progresso(i_id, -1))
 
-            # Botão de Incrementar (+)
             btn_mais = QPushButton("➕")
             btn_mais.setFixedSize(30, 26)
             btn_mais.setStyleSheet("background-color: #7000ff; color: #fff; font-size: 11px;")
             btn_mais.clicked.connect(lambda checked=False, i_id=it["id"]: self._alterar_progresso(i_id, 1))
 
-            # Botão de Deletar (❌)
             btn_del = QPushButton("❌")
             btn_del.setFixedSize(30, 26)
             btn_del.setStyleSheet("background-color: #381018; color: #ff4d4d; font-size: 11px;")
@@ -392,7 +508,6 @@ class MainWindow(QMainWindow):
         if not nome_item or not self.jogo_atual:
             return
 
-        # Pergunta o total do item/colecionável através de um input numérico
         total, ok = QInputDialog.getInt(self, "Total de Colecionáveis", f"Defina a quantidade total para '{nome_item}':", 10, 1, 10000, 1)
         if not ok:
             return

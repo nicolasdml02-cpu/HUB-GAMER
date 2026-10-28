@@ -104,3 +104,21 @@ def inserir_novo_jogo(nome, url_mapa, categoria="Geral"):
             VALUES (?, ?, ?)
         """, (nome, categoria, url_mapa))
         conn.commit()
+
+def atualizar_jogo(jogo_id, novo_nome, nova_url, nova_categoria="Geral"):
+    """Atualiza o nome, a URL e a categoria de um jogo existente."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE jogos 
+            SET nome = ?, url_mapa = ?, categoria = ?
+            WHERE id = ?
+        """, (novo_nome, nova_url, nova_categoria, jogo_id))
+        conn.commit()
+
+def excluir_jogo_db(jogo_id):
+    """Exclui um jogo do banco de dados (as anotações e checklists são apagadas em cascata)."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM jogos WHERE id = ?", (jogo_id,))
+        conn.commit()

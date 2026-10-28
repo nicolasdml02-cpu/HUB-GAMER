@@ -1,4 +1,5 @@
 import shutil
+from modules.database import atualizar_jogo, excluir_jogo_db
 from modules.database import get_connection, inserir_novo_jogo, get_db_path
 
 def listar_jogos():
@@ -83,3 +84,12 @@ def remover_item_checklist(item_id):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM checklist WHERE id = ?", (item_id,))
         conn.commit()
+        
+
+def editar_jogo(jogo_id, novo_nome, nova_url, nova_categoria="Geral"):
+    """Edita os dados de um jogo."""
+    atualizar_jogo(jogo_id, novo_nome, nova_url, nova_categoria)
+
+def excluir_jogo(jogo_id):
+    """Remove um jogo do sistema."""
+    excluir_jogo_db(jogo_id)
